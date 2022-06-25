@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package cdp.v1.my_guest;
+
+option go_package = "/cdp/v1/my_guest";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+message MyGuest {
+  int64 id = 1;
+  string firstname = 2;
+  string lastname = 3;
+  string email = 4;
+  google.protobuf.Timestamp reg_time = 5;
+}
+
+service GuestServices {
+  rpc add(MyGuest) returns (google.protobuf.BoolValue){};
+  rpc update(MyGuest) returns (MyGuest){};
+  rpc get(google.protobuf.Empty) returns (stream MyGuest){};
+  rpc delete(google.protobuf.Int64Value) returns (google.protobuf.BoolValue){};
+  rpc streamAdd(stream MyGuest) returns (stream MyGuest){};
+}

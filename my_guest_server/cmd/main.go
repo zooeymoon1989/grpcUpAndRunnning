@@ -5,6 +5,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"learningGRPC/my_guest_server/metrics"
+	"net/http"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -34,9 +39,32 @@ func init() {
 	log.Out = os.Stdout
 	// 注册gzip压缩
 	encoding.RegisterCompressor(encoding.GetCompressor(gzip.Name))
+	// 初始化 prometheus
+	metrics.Reg.MustRegister(metrics.GrpcMetrics, metrics.CustomMetricCounter)
 }
 
 func main() {
+
+	//  ---------
+	// 启动zapage 协程
+	//go func() {
+	//	mux := http.NewServeMux()
+	//	zpages.Handle(mux, "/debug")
+	//	log.Fatal(http.ListenAndServe("127.0.0.1:8081", mux))
+	//}()
+	//
+	//view.RegisterExporter(&exporter.PrintExporter{}) // 这个是展示用的，生产环境不宜使用
+	//
+	//if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
+	//	log.Fatal(err)
+	//}
+	//  ----------
+
+	httpServer := &http.Server{
+		Handler: promhttp.HandlerFor(metrics.Reg, promhttp.HandlerOpts{}),
+		Addr:    fmt.Sprintf("0.0.0.0:%d", 9092),
+	}
+
 	cert, err := tls.LoadX509KeyPair(config.CrtFile, config.KeyFile)
 	if err != nil {
 		panic(err)
@@ -53,9 +81,11 @@ func main() {
 	}
 
 	opts := []grpc.ServerOption{
+		//grpc.StatsHandler(&ocgrpc.ServerHandler{}), // 添加handler
 		grpc.Creds(credentials.NewServerTLSFromCert(&cert)),
 		grpc.ChainUnaryInterceptor(
 			//ensureValidBasicCredentials,
+			metrics.GrpcMetrics.UnaryServerInterceptor(),
 			ensureValidOauth2Credentials,
 			MyGuestUnaryServerInterceptor),
 		grpc.StreamInterceptor(MyGuestStreamServerInterceptor),
@@ -64,6 +94,15 @@ func main() {
 		opts...,
 	)
 	pb.RegisterGuestServicesServer(server, core.NewService())
+
+	metrics.GrpcMetrics.InitializeMetrics(server)
+
+	// 开始prometheus服务
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil {
+			log.Fatal("Unable to start a http server")
+		}
+	}()
 
 	reflection.Register(server)
 	log.Printf("Starting gRPC listener on port " + config.Port)

@@ -4,14 +4,28 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
+	"github.com/brianvoe/gofakeit"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opencensus.io/examples/exporter"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/stats/view"
 	"golang.org/x/oauth2"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"io/ioutil"
 	"learningGRPC/my_guest_client/core"
 	pb "learningGRPC/my_guest_client/grpc/cdp/v1/my_guest"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -21,7 +35,20 @@ const crtFile = "ca/client.crt"
 const keyFile = "ca/client.key"
 const caFile = "ca/ca.crt"
 
+func init() {
+	view.RegisterExporter(&exporter.PrintExporter{})
+
+	if err := view.Register(ocgrpc.DefaultClientViews...); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
+
+	reg := prometheus.NewRegistry()
+	grpcMetrics := grpc_prometheus.NewClientMetrics()
+	reg.MustRegister(grpcMetrics)
+
 	auth := oauth.NewOauthAccess(fetchToken())
 	cert, err := tls.LoadX509KeyPair(crtFile, keyFile)
 	if err != nil {
@@ -42,6 +69,7 @@ func main() {
 	}
 
 	opts := []grpc.DialOption{
+		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
 			ServerName:         hostname,
 			Certificates:       []tls.Certificate{cert},
@@ -63,6 +91,18 @@ func main() {
 	}
 	defer conn.Close()
 	c := pb.NewGuestServicesClient(conn)
+
+	httpSerer := &http.Server{
+		Handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}),
+		Addr:    fmt.Sprintf("0.0.0.0:%d", 9094),
+	}
+
+	go func() {
+		if err := httpSerer.ListenAndServe(); err != nil {
+			log.Fatal("Unable to start a http server.")
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	//ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second * 5))
 	defer cancel()
@@ -70,36 +110,36 @@ func main() {
 	if err != nil {
 		println(err)
 	}
-	//boolValue, err := c.Add(ctx, &pb.MyGuest{
-	//	Firstname: gofakeit.FirstName(),
-	//	Lastname:  gofakeit.LastName(),
-	//	Email:     gofakeit.Email(),
-	//	RegTime:   timestamppb.Now(),
-	//}, grpc.UseCompressor(gzip.Name))
-	//if err != nil {
-	//	println(err.Error())
-	//	errorCode := status.Code(err)
-	//	if errorCode == codes.InvalidArgument {
-	//		log.Printf("Invalid argument Error : %s", errorCode)
-	//		errorStatus := status.Convert(err)
-	//		for _, d := range errorStatus.Details() {
-	//			switch info := d.(type) {
-	//			case *errdetails.BadRequest_FieldViolation:
-	//				log.Printf("Request Field Invalid: %s", info)
-	//			default:
-	//				log.Printf("Unexpected error type: %s", info)
-	//			}
-	//		}
-	//	} else {
-	//		log.Printf("Unhandled error : %s ", errorCode)
-	//	}
-	//	return
-	//}
-	//if boolValue.Value {
-	//	println("yes")
-	//} else {
-	//	println("no")
-	//}
+	boolValue, err := c.Add(ctx, &pb.MyGuest{
+		Firstname: gofakeit.FirstName(),
+		Lastname:  gofakeit.LastName(),
+		Email:     gofakeit.Email(),
+		RegTime:   timestamppb.Now(),
+	}, grpc.UseCompressor(gzip.Name))
+	if err != nil {
+		println(err.Error())
+		errorCode := status.Code(err)
+		if errorCode == codes.InvalidArgument {
+			log.Printf("Invalid argument Error : %s", errorCode)
+			errorStatus := status.Convert(err)
+			for _, d := range errorStatus.Details() {
+				switch info := d.(type) {
+				case *errdetails.BadRequest_FieldViolation:
+					log.Printf("Request Field Invalid: %s", info)
+				default:
+					log.Printf("Unexpected error type: %s", info)
+				}
+			}
+		} else {
+			log.Printf("Unhandled error : %s ", errorCode)
+		}
+		return
+	}
+	if boolValue.Value {
+		println("yes")
+	} else {
+		println("no")
+	}
 
 	//getStream, err := c.Get(ctx, &emptypb.Empty{})
 	//defer getStream.CloseSend()

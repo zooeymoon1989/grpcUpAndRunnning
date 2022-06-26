@@ -14,6 +14,7 @@ import (
 	"io"
 	"learningGRPC/my_guest_server/bootstrap"
 	pb "learningGRPC/my_guest_server/grpc/cdp/v1/my_guest"
+	"learningGRPC/my_guest_server/metrics"
 	"learningGRPC/my_guest_server/models"
 	"log"
 )
@@ -91,6 +92,9 @@ func (m *MessageServer) Get(_ *emptypb.Empty, stream pb.GuestServices_GetServer)
 }
 
 func (m *MessageServer) Add(ctx context.Context, guest *pb.MyGuest) (*wrapperspb.BoolValue, error) {
+	// 添加到prometheus中
+	metrics.CustomMetricCounter.WithLabelValues(guest.Firstname).Inc()
+
 	model := models.MyGuest{
 		Firstname: guest.GetFirstname(),
 		Lastname:  guest.GetLastname(),

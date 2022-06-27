@@ -7,6 +7,7 @@ option go_package = "/cdp/v1/my_guest";
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
 
 message MyGuest {
   int64 id = 1;
@@ -18,8 +19,10 @@ message MyGuest {
 
 service GuestServices {
   rpc add(MyGuest) returns (google.protobuf.BoolValue){
+    // add restful function
     option (google.api.http) = {
-
+      post:"/v1/my_guest/add"
+      body: "*"
     };
   };
   rpc update(MyGuest) returns (MyGuest){};

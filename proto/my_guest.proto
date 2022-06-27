@@ -17,7 +17,11 @@ message MyGuest {
 }
 
 service GuestServices {
-  rpc add(MyGuest) returns (google.protobuf.BoolValue){};
+  rpc add(MyGuest) returns (google.protobuf.BoolValue){
+    option (google.api.http) = {
+
+    };
+  };
   rpc update(MyGuest) returns (MyGuest){};
   rpc get(google.protobuf.Empty) returns (stream MyGuest){};
   rpc delete(google.protobuf.Int64Value) returns (google.protobuf.BoolValue){};

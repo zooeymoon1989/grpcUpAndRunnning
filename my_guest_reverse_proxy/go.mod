@@ -1,6 +1,6 @@
 module learningGRPC/my_guest_reverse_proxy
 
-go 1.18
+go 1.19
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0

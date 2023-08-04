@@ -21,11 +21,11 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"io/ioutil"
 	"learningGRPC/my_guest_client/core"
 	pb "learningGRPC/my_guest_client/grpc/cdp/v1/my_guest"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -55,7 +55,7 @@ func main() {
 		panic(err)
 	}
 	certPool := x509.NewCertPool()
-	ca, err := ioutil.ReadFile(caFile)
+	ca, err := os.ReadFile(caFile)
 	if err != nil {
 		panic(err)
 	}
